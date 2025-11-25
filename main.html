@@ -113,6 +113,12 @@
             .ratio-value { font-size: 3rem; } .judgment-text { font-size: 1.5rem; }
             #saved-results-table th, #saved-results-table td { padding: 8px; font-size: 0.8rem; }
         }
+        /* PDF作成中オーバーレイ */
+        #pdf-progress-overlay { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 9999; }
+        .pdf-progress-box { background: #fff; padding: 18px 22px; border-radius: 12px; display: flex; gap: 14px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .pdf-progress-text { font-weight: 700; color: #111827; }
+        .spinner { width: 36px; height: 36px; border-radius: 50%; border: 4px solid #e6e6ef; border-top-color: #4f46e5; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -227,9 +233,8 @@
                 <div class="graph-section" id="graph-section-container">
                     <div class="saved-results-header">
                         <h2 id="graph-title">性能グラフ</h2>
-                        <button class="action-button secondary no-print" id="show-graph-btn">グラフ表示</button>
                     </div>
-                    <canvas id="fc-vs-l-chart" style="display: none;"></canvas>
+                    <canvas id="fc-vs-l-chart"></canvas>
                 </div>
 
                 <div class="saved-results-section" id="saved-results-container">
@@ -251,7 +256,24 @@
         </div>
     </div>
 
+    <!-- PDF作成中オーバーレイ -->
+    <div id="pdf-progress-overlay" style="display:none">
+        <div class="pdf-progress-box">
+            <div class="spinner" aria-hidden="true"></div>
+            <div class="pdf-progress-text">PDF作成中…しばらくお待ちください</div>
+        </div>
+    </div>
+
     <script>
+        // PDF作成中オーバーレイコントロール
+        function showPdfOverlay() {
+            const el = document.getElementById('pdf-progress-overlay');
+            if (el) el.style.display = 'flex';
+        }
+        function hidePdfOverlay() {
+            const el = document.getElementById('pdf-progress-overlay');
+            if (el) el.style.display = 'none';
+        }
         // --- グローバル変数と定数 ---
         let animationFrameId = null;
         let animationConfig = { k: 1.0, ratio: 0, L: 3000, N: 100 };
@@ -386,6 +408,7 @@
         function runAllCalculations() {
             calculateStress();
             calculateBearing();
+            try { showPerformanceGraph(); } catch (e) { /* noop */ }
         }
 
         function updateMaterial() {
@@ -675,47 +698,61 @@
             const contentWidth = pdfWidth - (margin * 2);
             const pageHeight = pdfHeight - (margin * 2);
 
-            const elementsToPrint = Array.from(document.querySelector('#pdf-content-wrapper').children);
-
             const buttonsToHide = document.querySelectorAll('.no-print');
-            buttonsToHide.forEach(btn => btn.style.display = 'none');
-
             const graphContainer = document.getElementById('graph-section-container');
             const savedResultsContainer = document.getElementById('saved-results-container');
-            if (performanceChart === null) graphContainer.style.display = 'none';
-            if (savedResults.length === 0) savedResultsContainer.style.display = 'none';
-            
-            let currentY = margin;
 
-            for (const element of elementsToPrint) {
-                if (element.style.display === 'none' || getComputedStyle(element).display === 'none') {
-                    continue;
-                }
-                
-                const canvas = await html2canvas(element, {
-                    scale: 2,
+            // オーバーレイを表示して処理開始
+            try {
+                showPdfOverlay();
+                buttonsToHide.forEach(btn => btn.style.display = 'none');
+                if (performanceChart === null) graphContainer.style.display = 'none';
+                if (savedResults.length === 0) savedResultsContainer.style.display = 'none';
+
+                // PDF作成を高速化するため、ラッパー要素を一度だけキャプチャしてページごとに分割して追加する
+                const wrapper = document.getElementById('pdf-content-wrapper');
+                const canvas = await html2canvas(wrapper, {
+                    scale: 1.2,
                     backgroundColor: '#ffffff',
                     useCORS: true
                 });
-                
-                const imgData = canvas.toDataURL('image/png');
-                const imgProps = pdf.getImageProperties(imgData);
-                const elementHeight = (imgProps.height * contentWidth) / imgProps.width;
 
-                if (currentY + elementHeight > pdfHeight - margin) {
-                    pdf.addPage();
-                    currentY = margin;
+                const fullWidth = canvas.width;
+                const fullHeight = canvas.height;
+                const contentWidthPt = contentWidth; // in pt
+                const pxPerPt = fullWidth / contentWidthPt;
+                const pageCanvasHeightPx = Math.floor((pdf.internal.pageSize.getHeight() - margin * 2) * pxPerPt);
+
+                let renderedHeight = 0;
+                let first = true;
+                while (renderedHeight < fullHeight) {
+                    const sliceHeight = Math.min(pageCanvasHeightPx, fullHeight - renderedHeight);
+                    const pageCanvas = document.createElement('canvas');
+                    pageCanvas.width = fullWidth;
+                    pageCanvas.height = sliceHeight;
+                    const ctx = pageCanvas.getContext('2d');
+                    ctx.drawImage(canvas, 0, renderedHeight, fullWidth, sliceHeight, 0, 0, fullWidth, sliceHeight);
+
+                    const imgData = pageCanvas.toDataURL('image/png');
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const imgHeightPt = (imgProps.height * contentWidthPt) / imgProps.width;
+
+                    if (!first) pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', margin, margin, contentWidthPt, imgHeightPt);
+                    first = false;
+
+                    renderedHeight += sliceHeight;
                 }
-                
-                pdf.addImage(imgData, 'PNG', margin, currentY, contentWidth, elementHeight);
-                currentY += elementHeight + 10;
+            } finally {
+                // 後片付け（必ず実行）
+                buttonsToHide.forEach(btn => btn.style.display = '');
+                graphContainer.style.display = '';
+                savedResultsContainer.style.display = '';
+                hidePdfOverlay();
             }
 
-            buttonsToHide.forEach(btn => btn.style.display = '');
-            graphContainer.style.display = '';
-            savedResultsContainer.style.display = '';
-
             pdf.save('計算結果.pdf');
+        
         }
 
         function showPerformanceGraph() {
@@ -752,11 +789,22 @@
         // --- 子ウィンドウから値を受け取る関数 ---
         window.receiveAxialForce = function(val) {
             const input = document.getElementById('axial-force');
-            if(input) {
-                input.value = val;
-                // 値変更イベントを手動発火して計算を実行させる
-                input.dispatchEvent(new Event('input'));
+            if (!input) return;
+            // 送られてきた値を数値として安全に処理する
+            try {
+                const parsed = parseFloat(String(val).replace(/,/g, ''));
+                if (!isNaN(parsed)) {
+                    input.value = parsed.toFixed(2);
+                } else {
+                    input.value = String(val);
+                }
+            } catch (e) {
+                input.value = String(val);
             }
+            // 値変更イベントを手動発火して計算を実行させる
+            input.dispatchEvent(new Event('input'));
+            if (typeof runAllCalculations === 'function') runAllCalculations();
+            try { window.focus(); } catch (e) { /* noop */ }
         };
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -786,7 +834,6 @@
             document.getElementById('clear-results-btn').addEventListener('click', clearResults);
             document.getElementById('export-pdf-btn').addEventListener('click', exportPageToPDF);
             document.getElementById('print-btn').addEventListener('click', () => window.print());
-            document.getElementById('show-graph-btn').addEventListener('click', showPerformanceGraph);
             
             function initializeCalculator() {
                 const selectedMaterial = document.querySelector('input[name="material"]:checked').value;
