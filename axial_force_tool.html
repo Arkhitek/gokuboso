@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>発生軸力(N) 計算ツール</title>
+<title>木造住宅用柱軸力計算ツール</title>
 <style>
 :root { --primary:#2c3e50; --bg:#f5f7fa; --panel:#fff; --border:#ccc; --ok:#27ae60; --ng:#c0392b; }
 body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(--bg);color:#333;margin:0;padding:20px;}
@@ -40,8 +40,10 @@ input[type=number],select{width:100%;padding:8px;border:1px solid var(--border);
 </head>
 <body>
 <div class="container">
-  <h1>発生軸力(N) 計算ツール</h1>
-  
+  <h1>木造住宅用柱軸力計算ツール</h1>
+  <div style="text-align:center; margin-bottom:18px;">
+    <a href="https://www.howtec.or.jp/publics/index/441/" target="_blank" style="display:inline-block; background:#3498db; color:#fff; font-weight:bold; padding:8px 18px; border-radius:6px; text-decoration:none; font-size:0.95rem; box-shadow:0 2px 6px rgba(52,152,219,0.08);">参考資料：壁量等の基準（令和７年施行）設計支援ツール</a>
+  </div>
   <div class="cols-2">
     <div>
       <div class="input-group-title">基本条件・柱配置</div>
@@ -77,7 +79,13 @@ input[type=number],select{width:100%;padding:8px;border:1px solid var(--border);
           <option value="inner">内部 (屋根+内壁)</option>
         </select>
       </div>
-      <div class="row"><label>負担面積 Ae (㎡)</label><input type="number" id="col_ae" value="5.0" step="0.1" onchange="Calc.exec()"></div>
+      <div class="row">
+        <label style="display:flex;align-items:center;gap:8px;">
+          負担面積 Ae (㎡)
+          <a href="https://www.howtec.or.jp/relays/download/441/1513/1313/5775/?file=/files/libs/5775/202405241338047322.pdf" target="_blank" style="background:#e67e22; color:#fff; font-weight:bold; padding:2px 10px; border-radius:4px; text-decoration:none; font-size:0.85rem;">参考資料</a>
+        </label>
+        <input type="number" id="col_ae" value="5.0" step="0.1" onchange="Calc.exec()">
+      </div>
     </div>
 
     <div>
