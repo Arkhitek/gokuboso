@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>柱軸力計算ツール</title>
+    <style>
+        :root { --primary: #2c3e50; --bg: #f5f7fa; --panel: #ffffff; --border: #ccc; }
+        body { font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; background: var(--panel); padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .row { margin-bottom: 15px; }
+        label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; color: #555; }
+        input[type="number"], select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-size: 1rem; }
+        .sub-panel { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-top: 5px; display: none; border: 1px solid #eee; }
+        .sub-panel.active { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .mini-lbl { font-size: 0.75rem; color: #666; }
+        .result-card { background: #2c3e50; color: #fff; padding: 20px; border-radius: 8px; text-align: center; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .result-val { font-size: 2.5rem; font-weight: bold; color: #f1c40f; line-height: 1.2; }
+        .result-unit { font-size: 1rem; color: #bdc3c7; }
+        
+        /* 連携ボタンのスタイル */
+        .send-btn {
+            display: block;
+            width: 100%;
+            margin-top: 15px;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .send-btn:hover { background: #219150; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>発生軸力(N) 計算ツール</h1>
+    <div class="grid">
+        <div>
+            <div class="row"><label>階数</label><select id="stories" onchange="UI.update(); Calc.exec();"><option value="2">2階建て</option><option value="1">平屋建て</option></select></div>
+            <div class="row"><label>用途 (積載荷重)</label><select id="usage" onchange="Calc.exec()"><option value="res">住宅 (P=1300)</option><option value="office">事務所 (P=1800)</option></select></div>
+            <div class="row" id="grp_h2"><label>2階 階高 (m)</label><input type="number" id="h2" value="2.8" step="0.01" onchange="Calc.exec()"></div>
+            <div class="row"><label>1階 階高 (m)</label><input type="number" id="h1" value="2.8" step="0.01" onchange="Calc.exec()"></div>
+            <div class="row"><label>検討する階</label><select id="col_floor" onchange="Calc.exec()"><option value="1">1階の柱</option><option value="2" id="opt_col_2f">2階の柱</option></select></div>
+            <div class="row"><label>配置 (負担部位)</label><select id="col_pos" onchange="Calc.exec()"><option value="outer">外周部 (屋根+外壁)</option><option value="inner">内部 (屋根+内壁)</option></select></div>
+            <div class="row"><label>負担面積 Ae (㎡)</label><input type="number" id="col_ae" value="5.0" step="0.1" onchange="Calc.exec()"></div>
+        </div>
+        <div>
+            <div class="row"><label>屋根仕様</label><select id="mat_roof" onchange="Calc.exec()"><option value="990">瓦屋根 (990 N/㎡)</option><option value="740">スレート (740 N/㎡)</option><option value="500">金属板 (500 N/㎡)</option></select></div>
+            <div class="row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><div><label>勾配(寸) <span id="disp_deg" style="font-size:0.8em;color:#e67e22"></span></label><input type="number" id="kobai" value="4" onchange="Calc.exec()"></div><div><label>軒の出(m)</label><input type="number" id="noki" value="0.6" step="0.1" onchange="Calc.exec()"></div></div>
+            <div class="row"><label>天井断熱材</label><select id="sel_insul_roof" onchange="UI.toggle('roof'); Calc.exec();"><option value="100">初期値 (100 N/㎡)</option><option value="custom">任意入力</option></select><div id="pnl_insul_roof" class="sub-panel"><div><span class="mini-lbl">密度kg/㎥</span><input type="number" id="val_ir_d" placeholder="24" onchange="Calc.exec()"></div><div><span class="mini-lbl">厚さmm</span><input type="number" id="val_ir_t" placeholder="400" onchange="Calc.exec()"></div></div></div>
+            <div class="row"><label>太陽光パネル</label><select id="mat_solar" onchange="UI.toggle('solar'); Calc.exec();"><option value="none">なし</option><option value="200">あり (200 N/㎡)</option><option value="custom">任意入力 (単位荷重)</option></select><div id="pnl_solar" class="sub-panel" style="grid-template-columns:1fr;"><div><span class="mini-lbl">単位荷重(N/㎡)</span><input type="number" id="val_solar_unit" placeholder="0" onchange="Calc.exec()"></div></div></div>
+            <div class="row"><label>外壁仕様</label><select id="mat_wall" onchange="Calc.exec()"><option value="1000">土塗り壁 (1000 N/㎡)</option><option value="890">モルタル (890 N/㎡)</option><option value="600" selected>サイディング (600 N/㎡)</option><option value="500">金属板張 (500 N/㎡)</option><option value="350">下見板張 (350 N/㎡)</option></select></div>
+            <div class="row"><label>外壁断熱材</label><select id="sel_insul_wall" onchange="UI.toggle('wall'); Calc.exec();"><option value="70">初期値 (70 N/㎡)</option><option value="custom">任意入力</option></select><div id="pnl_insul_wall" class="sub-panel"><div><span class="mini-lbl">密度kg/㎥</span><input type="number" id="val_iw_d" placeholder="24" onchange="Calc.exec()"></div><div><span class="mini-lbl">厚さmm</span><input type="number" id="val_iw_t" placeholder="170" onchange="Calc.exec()"></div></div></div>
+        </div>
+    </div>
+    <div class="result-card">
+        <div>発生軸力 N</div>
+        <div class="result-val" id="res_n">-</div>
+        <div class="result-unit">kN</div>
+        <button class="send-btn" onclick="sendDataToParent()">この柱軸力を設定</button>
+    </div>
+</div>
+<script>
+const UI={update:()=>{const s=parseInt(document.getElementById('stories').value),is2F=(s===2);document.getElementById('grp_h2').style.display=is2F?'block':'none';const cf=document.getElementById('col_floor');document.getElementById('opt_col_2f').disabled=!is2F;if(!is2F&&cf.value=="2")cf.value="1"},toggle:(k)=>{let s;if(k==='solar')s=document.getElementById('mat_solar').value;else s=document.getElementById('sel_insul_'+k).value;const p=document.getElementById('pnl_'+(k==='solar'?'solar':'insul_'+k));p.style.display=(s==='custom')?'grid':'none'}};
+const val=(id)=>parseFloat(document.getElementById(id).value)||0;const txt=(id,v)=>document.getElementById(id).textContent=v;
+const Calc={FACTOR_WALL:0.4136,FACTOR_WIN:0.0409,exec:()=>{const stories=parseInt(document.getElementById('stories').value),h1=val('h1'),h2=(stories===2)?val('h2'):0,noki=val('noki'),kobai=val('kobai');
+const ang=Math.atan(kobai/10)*(180/Math.PI);txt('disp_deg',`(${ang.toFixed(2)}°)`);
+const ba=6*16.5,pa=(6+2*noki)*(16.5+2*noki),sf=Math.sqrt(1+Math.pow(kobai/10,2)),rm=(pa/ba)*sf;
+const wm=val('mat_roof');let wi=100;if(document.getElementById('sel_insul_roof').value==='custom')wi=val('val_ir_d')*(val('val_ir_t')/1000)*9.8;
+const sm=document.getElementById('mat_solar').value;let wsp=0,wsf=0;if(sm==='200')wsp=200;else if(sm==='custom')wsf=val('val_solar_unit');
+let Gr=wm*rm+(wi+wsp)*sf+wsf;Gr=Math.round(Gr);
+const wwm=val('mat_wall');let wwi=70;if(document.getElementById('sel_insul_wall').value==='custom')wwi=val('val_iw_d')*(val('val_iw_t')/1000)*9.8;
+const getWallLoad=(h)=>{if(h<=0)return 0;return Math.round((wwm+wwi)*Calc.FACTOR_WALL*h+400*Calc.FACTOR_WIN*h)};
+const getInnerLoad=(h)=>{if(h<=0)return 0;return Math.round(200*h/2.8)};
+const wo2=getWallLoad(h2),wi2=getInnerLoad(h2),wo1=getWallLoad(h1),wi1=getInnerLoad(h1);
+const usage=document.getElementById('usage').value,wfc=610+((usage==='res')?1300:1800);
+const floor=parseInt(document.getElementById('col_floor').value),pos=document.getElementById('col_pos').value;
+let Wd=0;if(stories===2){if(floor===2){Wd=Gr+0.5*((pos==='outer')?wo2:wi2)}else{const ww2=(pos==='outer')?wo2:wi2,ww1=(pos==='outer')?wo1:wi1;Wd=Gr+ww2+wfc+0.5*ww1}}else{Wd=Gr+0.5*((pos==='outer')?wo1:wi1)}
+Wd=Math.round(Wd);const N=Wd*val('col_ae')/1000;txt('res_n',N.toFixed(2));}};
+UI.update();UI.toggle('roof');UI.toggle('wall');UI.toggle('solar');Calc.exec();
+
+// 親ウィンドウへデータを送る関数
+function sendDataToParent() {
+    const nVal = document.getElementById('res_n').textContent;
+    if(window.opener && !window.opener.closed) {
+        // 親ウィンドウの関数を呼び出す
+        if (window.opener.receiveAxialForce) {
+            window.opener.receiveAxialForce(nVal);
+            // window.close(); // 必要であれば閉じる
+        } else {
+            alert("連携元の画面が見つかりません。");
+        }
+    } else {
+        alert("このウィンドウは連携元から開かれていません。");
+    }
+}
+</script>
+</body>
+</html>

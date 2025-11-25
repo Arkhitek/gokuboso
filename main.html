@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極細柱の許容応力度計算＆めり込み検討プログラム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-noto-sans-jp-font/dist/NotoSansJP-Regular-normal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 24px; box-shadow: 0 32px 64px rgba(0, 0, 0, 0.1); overflow: hidden; border: 1px solid #e2e8f0; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; text-align: center; padding: 50px 30px; position: relative; overflow: hidden; }
+        .header h1 { font-size: 2.8rem; font-weight: 800; margin-bottom: 15px; text-shadow: 2px 2px 8px rgba(0,0,0,0.4); letter-spacing: -0.5px; }
+        .content { padding: 50px; }
+        .input-section { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 20px; padding: 40px; margin-bottom: 40px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); position: relative; }
+        .input-section h2 { color: #1e293b; font-size: 1.8rem; margin-bottom: 30px; text-align: center; font-weight: 700; }
+        .input-section h3 { color: #374151; font-size: 1.2rem; margin-bottom: 15px; font-weight: 600; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
+        .input-field { display: flex; flex-direction: column; margin-bottom: 15px; }
+        .input-field.length-field { flex-direction: row; align-items: flex-end; gap: 10px; }
+        .input-field.length-field .input-wrapper { flex-grow: 1; }
+        .input-field label { display: block; margin-bottom: 10px; font-weight: 600; color: #374151; font-size: 1rem; }
+        .input-field input, .input-field select { width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1.1rem; transition: all 0.3s; background: white; font-weight: 500; }
+        .input-field input:focus, .input-field select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1); transform: translateY(-2px); }
+        .input-field input[readonly], .input-field select[disabled] { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #64748b; cursor: not-allowed; }
+        .material-selector { grid-column: 1 / -1; display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; }
+        .material-option { flex: 1; max-width: 200px; }
+        .material-option input[type="radio"] { display: none; }
+        .material-option label { display: block; padding: 15px 25px; background: white; border: 2px solid #e5e7eb; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; font-weight: 600; }
+        .material-option input[type="radio"]:checked + label { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-color: #667eea; transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3); }
+        .action-button { display: block; margin: 30px auto 0; padding: 16px 40px; background: #4f46e5; color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .action-button:hover { background: #4338ca; transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .secondary-button { padding: 16px; background: #64748b; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .secondary-button:hover { background: #475569; }
+        .results-section { background: #fff; border-radius: 20px; padding: 40px; margin-bottom: 40px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+        .results-section h2 { color: #1e293b; font-size: 1.8rem; margin-bottom: 30px; text-align: center; font-weight: 700; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; }
+        .result-item { background: #f8fafc; padding: 25px; border-radius: 16px; border-left: 5px solid #667eea; }
+        .result-label { font-weight: 600; color: #374151; margin-bottom: 10px; font-size: 1rem; }
+        .result-value { font-size: 1.6rem; font-weight: 800; color: #1e293b; }
+        .judgment-section { padding: 40px; text-align: center; margin-bottom: 40px; border-radius: 20px; transition: all 0.4s ease; }
+        .judgment-section h3 { font-size: 1.2rem; font-weight: 600; color: #475569; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .verification-ratio-display { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .ratio-value { font-size: 4rem; font-weight: 800; line-height: 1; }
+        .color-bar { width: 100%; height: 20px; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .color-bar-fill { height: 100%; width: 0%; border-radius: 10px; transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out; }
+        .judgment-text { font-size: 1.8rem; font-weight: 700; }
+        .judgment-section.ok { background: #f0fdf4; border: 1px solid #bbf7d0; } .judgment-section.ok .ratio-value, .judgment-section.ok .judgment-text { color: #15803d; } .judgment-section.ok .color-bar-fill { background-color: #22c55e; }
+        .judgment-section.warning { background: #fffbeb; border: 1px solid #fde68a; } .judgment-section.warning .ratio-value, .judgment-section.warning .judgment-text { color: #b45309; } .judgment-section.warning .color-bar-fill { background-color: #f59e0b; }
+        .judgment-section.ng { background: #fef2f2; border: 1px solid #fecaca; } .judgment-section.ng .ratio-value, .judgment-section.ng .judgment-text { color: #b91c1c; } .judgment-section.ng .color-bar-fill { background-color: #ef4444; }
+        .saved-results-section, .graph-section { background: #fff; padding: 40px; border-radius: 20px; margin-bottom: 40px; }
+        .saved-results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .saved-results-header h2, .graph-section h2 { color: #1e293b; }
+        #clear-results-btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; background: #e5e7eb; color: #374151; }
+        #clear-results-btn:hover { background: #d1d5db; }
+        .table-container { overflow-x: auto; }
+        #saved-results-table { width: 100%; border-collapse: collapse; }
+        #saved-results-table th, #saved-results-table td { padding: 12px 15px; border: 1px solid #e5e7eb; text-align: left; }
+        #saved-results-table th { background-color: #f9fafb; font-weight: 600; min-width: 150px; }
+        #saved-results-table td { background-color: #fff; text-align: right; }
+        .bottom-toolbar { display: flex; justify-content: center; gap: 20px; margin-top: 40px; }
+        .action-button.secondary { background: #64748b; } .action-button.secondary:hover { background: #475569; }
+        .plate-input-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+        
+        #animation-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fdfdff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 10px;
+            margin: 0 auto 30px auto;
+            width: 100%;
+            max-width: 320px;
+            min-height: 220px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        #buckling-animation {
+            max-width: 100%;
+            height: auto;
+        }
+
+        @media print {
+            html, body { height: auto; margin: 0 !important; padding: 0 !important; background: #fff !important; font-size: 10pt; }
+            body * { visibility: hidden; }
+            .printable-area, .printable-area * { visibility: visible; }
+            .printable-area { position: absolute; left: 0; top: 0; width: 100%; max-width: 100%; margin: 0; padding: 0; box-shadow: none; border: none; }
+            .no-print { display: none !important; }
+            .content { padding: 20px !important; }
+            .header { display: none !important; }
+            .input-section, .results-section, .judgment-section, .graph-section, .saved-results-section { page-break-inside: avoid; box-shadow: none; border: 1px solid #ccc; padding: 15px; background: #fff !important; }
+            .input-grid, .results-grid { grid-template-columns: 1fr !important; }
+            .material-selector { flex-direction: row; }
+            .material-option { max-width: 150px; }
+            #fc-vs-l-chart { max-height: 400px; }
+        }
+        
+        @media (max-width: 768px) {
+            .content { padding: 30px 20px; } .header h1 { font-size: 2.2rem; }
+            .input-grid, .results-grid, .plate-input-grid { grid-template-columns: 1fr; }
+            .material-selector { flex-direction: column; gap: 15px; } .material-option { max-width: none; }
+            .input-section, .results-section, .judgment-section, .graph-section, .saved-results-section { padding: 25px; }
+            .bottom-toolbar { flex-direction: column; }
+        }
+        @media (max-width: 480px) {
+            .content { padding: 20px 15px; }
+            .header h1 { font-size: 1.8rem; }
+            .input-section h2, .results-section h2, .graph-section h2, .saved-results-header h2 { font-size: 1.4rem; }
+            .ratio-value { font-size: 3rem; } .judgment-text { font-size: 1.5rem; }
+            #saved-results-table th, #saved-results-table td { padding: 8px; font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container printable-area">
+        <div class="header"><h1>極細柱の許容応力度計算</h1></div>
+        <div class="content">
+            
+            <div id="pdf-content-wrapper">
+                <div class="input-section">
+                    <h2>1. 極細柱の諸元（入力項目）</h2>
+                    <div class="material-selector">
+                        <div class="material-option"><input type="radio" id="steel" name="material" value="steel" checked><label for="steel">スチール</label></div>
+                        <div class="material-option"><input type="radio" id="stainless" name="material" value="stainless"><label for="stainless">ステンレス</label></div>
+                    </div>
+                    <div class="input-grid">
+                        <div class="input-field"><label for="section-type">断面種類</label><select id="section-type"><option value="1">No.1 (D=48.6mm)</option><option value="2">No.2 (D=60.5mm)</option><option value="3">No.3 (D=76.3mm)</option><option value="4">No.4 (D=89.1mm)</option><option value="5">No.5 (D=101.6mm)</option><option value="custom">カスタム</option></select></div>
+                        <div class="input-field"><label for="diameter">外径 D (mm)</label><input type="number" id="diameter" value="48.6"></div>
+                        <div class="input-field"><label for="thickness">板厚 t (mm)</label><input type="number" id="thickness" value="3.2"></div>
+                        <div class="input-field length-field">
+                            <div class="input-wrapper"><label for="length">部材長さ L (mm)</label><input type="number" id="length" value="3000"></div>
+                            <button class="secondary-button no-print" id="calc-max-l-btn" title="検定比1.00となる最大の長さを逆算します">最大長さ計算</button>
+                        </div>
+                        <div class="input-field"><label for="strength">基準強度 F (N/mm²)</label><select id="strength"></select></div>
+                        
+                        <div class="input-field">
+                            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
+                                <label for="axial-force" style="margin-bottom: 0;">柱が負担する軸力N (kN)</label>
+                                <a href="#" onclick="openAxialForceTool(); return false;" style="font-size: 0.9rem; color: #4f46e5; text-decoration: none; font-weight: bold; border-bottom: 1px dashed #4f46e5;">柱軸力計算ツール</a>
+                            </div>
+                            <input type="number" id="axial-force" value="10">
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="animation-container">
+                    <canvas id="buckling-animation" width="200" height="220"></canvas>
+                </div>
+                
+                <div class="judgment-section ok" id="judgment-section-stress">
+                    <h3>許容応力度 検定結果</h3>
+                    <div class="verification-ratio-display"><span class="ratio-value" id="judgment-ratio-value-stress">0.00</span></div>
+                    <div class="color-bar"><div class="color-bar-fill" id="color-bar-fill-stress"></div></div>
+                    <div class="judgment-text" id="judgment-text-stress">OK</div>
+                </div>
+                <div class="results-section">
+                    <h2>断面性能・許容応力度計算結果</h2>
+                    <div class="results-grid">
+                        <div class="result-item"><div class="result-label">断面積 A (mm²)</div><div class="result-value" id="calc-area">0.00</div></div>
+                        <div class="result-item"><div class="result-label">断面二次モーメント I (mm⁴)</div><div class="result-value" id="calc-moment">0</div></div>
+                        <div class="result-item"><div class="result-label">断面二次半径 i (mm)</div><div class="result-value" id="calc-radius">0.000</div></div>
+                        <div class="result-item"><div class="result-label">細長比 λ</div><div class="result-value" id="calc-lambda">0.0</div></div>
+                        <div class="result-item"><div class="result-label" id="lambda-limit-label">限界細長比 Λ</div><div class="result-value" id="calc-lambda-limit">0.00</div></div>
+                        <div class="result-item"><div class="result-label">許容圧縮応力度 fc (N/mm²)</div><div class="result-value" id="calc-fc">0.00</div></div>
+                        <div class="result-item"><div class="result-label">軸応力度 σ (N/mm²)</div><div class="result-value" id="calc-sigma">0.00</div></div>
+                        <div class="result-item"><div class="result-label">許容圧縮耐力 Fc (kN)</div><div class="result-value" id="calc-fc-force">0.00</div></div>
+                        <div class="result-item"><div class="result-label">検定比 N/Fc</div><div class="result-value" id="calc-verification-ratio">0.00</div></div>
+                    </div>
+                </div>
+
+                <div class="input-section">
+                    <h2>2. 柱頭柱脚のめり込み検討（入力項目）</h2>
+                    <div class="input-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+                        <div class="input-field"><label for="bearing-timber-species">横架材の材種</label><select id="bearing-timber-species"><option value="9.0">ベイマツ</option><option value="6.0">スギ</option><option value="9.0">ヒノキ</option><option value="7.5">ベイツガ</option><option value="7.8">ヒバ</option><option value="10.8">クリ</option><option value="custom">任意入力</option></select></div>
+                        <div class="input-field"><label for="bearing-fcv">めり込み基準強度 Fcv (N/mm²)</label><input type="number" id="bearing-fcv" step="0.1" readonly></div>
+                        <div class="input-field"><label for="bearing-sigma-cv">長期めり込み許容応力度 σcv (N/mm²)</label><input type="text" id="bearing-sigma-cv" readonly></div>
+                    </div>
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e2e8f0;">
+                    <div class="input-grid plate-input-grid">
+                        <div>
+                            <h3>柱頭プレート</h3>
+                            <div class="input-field"><label>形状</label><select id="bearing-head-plate-shape"><option value="rect">矩形</option><option value="circ">円形</option></select></div>
+                            <div id="bearing-head-plate-dims-rect">
+                                <div class="input-field"><label>寸法 W×H (mm)</label><div style="display:flex; gap:10px;"><input type="number" id="bearing-head-rect-w"><input type="number" id="bearing-head-rect-h"></div></div>
+                            </div>
+                            <div id="bearing-head-plate-dims-circ" style="display:none;">
+                                <div class="input-field"><label>直径 D (mm)</label><input type="number" id="bearing-head-circ-d"></div>
+                            </div>
+                            <div class="input-field"><label>ボルト·ビス孔 (数量-穴径)</label><input type="text" id="bearing-head-bolt-holes" placeholder="例: 2-17, 6-6"></div>
+                        </div>
+                        <div>
+                            <h3>柱脚プレート</h3>
+                            <div class="input-field"><label>形状</label><select id="bearing-base-plate-shape"><option value="rect">矩形</option><option value="circ">円形</option></select></div>
+                            <div id="bearing-base-plate-dims-rect">
+                                <div class="input-field"><label>寸法 W×H (mm)</label><div style="display:flex; gap:10px;"><input type="number" id="bearing-base-rect-w"><input type="number" id="bearing-base-rect-h"></div></div>
+                            </div>
+                            <div id="bearing-base-plate-dims-circ" style="display:none;">
+                                <div class="input-field"><label>直径 D (mm)</label><input type="number" id="bearing-base-circ-d"></div>
+                            </div>
+                            <div class="input-field"><label>ボルト·ビス孔 (数量-穴径)</label><input type="text" id="bearing-base-bolt-holes" placeholder="例: 2-17, 6-6"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="judgment-section ok" id="judgment-section-bearing">
+                    <h3>めり込み 検定結果</h3>
+                    <div class="verification-ratio-display"><span class="ratio-value" id="judgment-ratio-value-bearing">0.00</span></div>
+                    <div class="color-bar"><div class="color-bar-fill" id="color-bar-fill-bearing"></div></div>
+                    <div class="judgment-text" id="judgment-text-bearing">OK</div>
+                </div>
+                <div class="results-section">
+                    <h2>めり込み検討 計算結果</h2>
+                    <div class="results-grid">
+                        <div class="result-item"><div class="result-label">検定箇所 (不利な方)</div><div class="result-value" id="bearing-result-location">---</div></div>
+                        <div class="result-item"><div class="result-label">プレート仕様</div><div class="result-value" id="bearing-result-spec">---</div></div>
+                        <div class="result-item"><div class="result-label">有効断面積 A (mm²)</div><div class="result-value" id="bearing-result-area">0.00</div></div>
+                        <div class="result-item"><div class="result-label">許容めり込み耐力 P (kN)</div><div class="result-value" id="bearing-result-capacity">0.00</div></div>
+                        <div class="result-item"><div class="result-label">検定比 N / P</div><div class="result-value" id="bearing-result-ratio">0.00</div></div>
+                    </div>
+                </div>
+                
+                <div class="graph-section" id="graph-section-container">
+                    <div class="saved-results-header">
+                        <h2 id="graph-title">性能グラフ</h2>
+                        <button class="action-button secondary no-print" id="show-graph-btn">グラフ表示</button>
+                    </div>
+                    <canvas id="fc-vs-l-chart" style="display: none;"></canvas>
+                </div>
+
+                <div class="saved-results-section" id="saved-results-container">
+                    <div class="saved-results-header no-print">
+                        <h2>保存した結果</h2>
+                        <button id="clear-results-btn">すべてクリア</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="saved-results-table"></table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bottom-toolbar no-print">
+                <button class="action-button no-print" id="save-result-btn">この結果を保存</button>
+                <button class="action-button" id="export-pdf-btn">計算書PDF出力</button>
+                <button class="action-button secondary" id="print-btn">画面を印刷</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- グローバル変数と定数 ---
+        let animationFrameId = null;
+        let animationConfig = { k: 1.0, ratio: 0, L: 3000, N: 100 };
+        const animationDuration = 2000; 
+        let animationStartTime = 0;
+        
+        function animationLoop(timestamp) {
+            if (!animationStartTime) {
+                animationStartTime = timestamp;
+            }
+            const elapsedTime = timestamp - animationStartTime;
+            const progress = (elapsedTime % animationDuration) / animationDuration;
+            
+            const easedProgress = 0.5 * (1 - Math.cos(progress * Math.PI));
+        
+            drawBucklingAnimation(animationConfig.k, animationConfig.ratio, animationConfig.L, animationConfig.N, easedProgress);
+        
+            animationFrameId = requestAnimationFrame(animationLoop);
+        }
+        
+        function startOrUpdateAnimation(k, ratio, L, N) {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            animationConfig = { k, ratio, L, N };
+            animationStartTime = 0;
+            animationFrameId = requestAnimationFrame(animationLoop);
+        }
+
+        function drawBucklingAnimation(kValue, ratio, L, N, progress) {
+            const canvas = document.getElementById('buckling-animation');
+            if (!canvas || !canvas.getContext) return;
+            const ctx = canvas.getContext('2d');
+        
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+        
+            const initialColumnH = h * 0.7;
+            const initialTopY = (h - initialColumnH) / 2 + 10;
+            const bottomY = initialTopY + initialColumnH;
+            const midX = w / 2;
+            const isNg = ratio > 1.0;
+            const isValid = isFinite(ratio);
+        
+            const maxVDisplacement = 8;
+            const currentVDisplacement = maxVDisplacement * progress;
+            const currentTopY = initialTopY + currentVDisplacement;
+            const currentColumnH = bottomY - currentTopY;
+        
+            ctx.fillStyle = '#64748b';
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 1.5;
+            const drawPin = (y) => {
+                ctx.beginPath();
+                ctx.moveTo(midX - 12, y); ctx.lineTo(midX + 12, y); ctx.lineTo(midX, y + (y === currentTopY ? 8 : -8)); ctx.closePath();
+                ctx.fill();
+            };
+            drawPin(currentTopY);
+            drawPin(bottomY);
+            
+            const maxDeflection = (w / 4.5) * Math.min(ratio, 1.2);
+            const currentDeflection = maxDeflection * progress;
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = isNg ? '#ef4444' : (ratio > 0.9 ? '#f59e0b' : '#1e293b');
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(midX, bottomY);
+            if (isValid) {
+                for (let i = 0; i <= currentColumnH; i++) {
+                    const y = bottomY - i;
+                    const p = i / currentColumnH;
+                    const shapeFactor = Math.sin(p * Math.PI); 
+                    const x = midX + currentDeflection * shapeFactor;
+                    ctx.lineTo(x, y);
+                }
+            } else {
+                 ctx.lineTo(midX, currentTopY);
+            }
+            ctx.stroke();
+        
+            ctx.fillStyle = isNg ? '#b91c1c' : '#374151';
+            ctx.strokeStyle = isNg ? '#b91c1c' : '#374151';
+            ctx.font = "bold 14px sans-serif";
+            ctx.textAlign = 'center';
+        
+            const nText = N ? `${N.toLocaleString()} kN` : "N";
+            const arrowY = currentTopY - 8;
+            ctx.beginPath();
+            ctx.moveTo(midX, arrowY - 15); ctx.lineTo(midX, arrowY); ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(midX, arrowY); ctx.lineTo(midX - 5, arrowY - 7); ctx.lineTo(midX + 5, arrowY - 7); ctx.closePath();
+            ctx.fill();
+            ctx.fillText(nText, midX, arrowY - 20);
+        
+            const lText = L ? `${L.toLocaleString()} mm` : "L";
+            const dimX = midX - 50;
+            ctx.beginPath();
+            ctx.moveTo(dimX, currentTopY); ctx.lineTo(dimX, bottomY);
+            ctx.moveTo(dimX - 4, currentTopY); ctx.lineTo(dimX + 4, currentTopY);
+            ctx.moveTo(dimX - 4, bottomY); ctx.lineTo(dimX + 4, bottomY);
+            ctx.stroke();
+            ctx.save();
+            ctx.translate(dimX - 10, (currentTopY + bottomY) / 2); ctx.rotate(-Math.PI / 2);
+            ctx.fillText(lText, 0, 0);
+            ctx.restore();
+        }
+
+        const { jsPDF } = window.jspdf;
+        const sectionDataSteel = { 1: { D: 48.6, t: 3.2 }, 2: { D: 60.5, t: 3.2 }, 3: { D: 76.3, t: 3.2 }, 4: { D: 89.1, t: 3.2 }, 5: { D: 101.6, t: 3.2 } };
+        const sectionDataStainless = { 1: { D: 48.6, t: 3.0 }, 2: { D: 60.5, t: 3.0 }, 3: { D: 76.3, t: 3.0 }, 4: { D: 89.1, t: 3.0 }, 5: { D: 101.6, t: 3.0 } };
+        const materialData = {
+            steel: { name: "スチール", grades: [{ value: "235", text: "STK400 (235)" },{ value: "325", text: "STK490 (325)" },{ value: "355", text: "STK500 (355)" }] },
+            stainless: { name: "ステンレス", grades: [{ value: "235", text: "SUS304A (235)" }] }
+        };
+        const fcLookupTable = {"0.01":156.66,"0.02":156.66,"0.03":156.66,"0.04":156.66,"0.05":156.66,"0.06":156.66,"0.07":156.66,"0.08":156.66,"0.09":156.66,"0.10":156.66,"0.11":156.66,"0.12":156.66,"0.13":156.66,"0.14":156.66,"0.15":156.66,"0.16":156.66,"0.17":156.66,"0.18":156.66,"0.19":156.66,"0.20":156.66,"0.21":155.72,"0.22":154.78,"0.23":153.84,"0.24":152.9,"0.25":151.96,"0.26":151.02,"0.27":150.08,"0.28":149.14,"0.29":148.2,"0.30":147.26,"0.31":146.32,"0.32":145.38,"0.33":144.44,"0.34":143.5,"0.35":142.56,"0.36":141.62,"0.37":140.68,"0.38":139.74,"0.39":138.8,"0.40":137.86,"0.41":136.92,"0.42":135.98,"0.43":135.04,"0.44":134.1,"0.45":133.16,"0.46":132.22,"0.47":131.28,"0.48":130.34,"0.49":129.4,"0.50":128.46,"0.51":127.52,"0.52":126.58,"0.53":125.64,"0.54":124.7,"0.55":123.76,"0.56":122.82,"0.57":121.88,"0.58":120.94,"0.59":120,"0.60":119.06,"0.61":118.12,"0.62":117.18,"0.63":116.24,"0.64":115.3,"0.65":114.36,"0.66":113.42,"0.67":112.48,"0.68":111.54,"0.69":110.6,"0.70":109.66,"0.71":108.72,"0.72":107.78,"0.73":106.84,"0.74":105.9,"0.75":104.96,"0.76":104.02,"0.77":103.08,"0.78":102.14,"0.79":101.2,"0.80":100.26,"0.81":99.32,"0.82":98.38,"0.83":97.44,"0.84":96.5,"0.85":95.56,"0.86":94.62,"0.87":93.68,"0.88":92.74,"0.89":91.8,"0.90":90.86,"0.91":89.92,"0.92":88.98,"0.93":88.04,"0.94":87.1,"0.95":86.16,"0.96":85.22,"0.97":84.28,"0.98":83.34,"0.99":82.4,"1.00":81.46,"1.01":80.52,"1.02":79.58,"1.03":78.64,"1.04":77.7,"1.05":76.76,"1.06":75.82,"1.07":74.88,"1.08":73.94,"1.09":73,"1.10":72.06,"1.11":71.12,"1.12":70.18,"1.13":69.24,"1.14":68.3,"1.15":67.36,"1.16":66.42,"1.17":65.48,"1.18":64.54,"1.19":63.6,"1.20":62.66,"1.21":61.72,"1.22":60.78,"1.23":59.84,"1.24":58.9,"1.25":57.96,"1.26":57.02,"1.27":56.08,"1.28":55.14,"1.29":54.2,"1.30":53.26,"1.31":52.32,"1.32":51.38,"1.33":50.44,"1.34":49.5,"1.35":48.56,"1.36":47.62,"1.37":46.68,"1.38":45.74,"1.39":44.8,"1.40":43.86,"1.41":42.92,"1.42":41.98,"1.43":41.04,"1.44":40.1,"1.45":39.16,"1.46":38.22,"1.47":37.28,"1.48":36.34,"1.49":35.4,"1.50":34.46,"1.51":34.35,"1.52":33.9,"1.53":33.46,"1.54":33.02,"1.55":32.6,"1.56":32.18,"1.57":31.77,"1.58":31.37,"1.59":30.98,"1.60":30.59,"1.61":30.22,"1.62":29.84,"1.63":29.48,"1.64":29.12,"1.65":28.77,"1.66":28.42,"1.67":28.08,"1.68":27.75,"1.69":27.42,"1.70":27.1,"1.71":26.78,"1.72":26.47,"1.73":26.17,"1.74":25.87,"1.75":25.57,"1.76":25.28,"1.77":25,"1.78":24.72,"1.79":24.44,"1.80":24.17,"1.81":23.91,"1.82":23.64,"1.83":23.39,"1.84":23.13,"1.85":22.88,"1.86":22.64,"1.87":22.4,"1.88":22.16,"1.89":21.92,"1.90":21.69,"1.91":21.47,"1.92":21.24,"1.93":21.02,"1.94":20.81,"1.95":20.6,"1.96":20.39,"1.97":20.18,"1.98":19.98,"1.99":19.78,"2.00":19.58,"2.01":19.38,"2.02":19.19,"2.03":19,"2.04":18.82,"2.05":18.63,"2.06":18.45,"2.07":18.28,"2.08":18.1,"2.09":17.93,"2.10":17.76,"2.11":17.59,"2.12":17.42,"2.13":17.26,"2.14":17.1,"2.15":16.94,"2.16":16.78,"2.17":16.63,"2.18":16.48,"2.19":16.33,"2.20":16.18};
+        const defaultPlateData = {
+            "48.6": { head: { shape: 'circ', dims: [100], bolts: '6-6' }, base: { shape: 'rect', dims: [105, 80], bolts: '2-17, 6-6' } },
+            "60.5": { head: { shape: 'rect', dims: [120, 100], bolts: '6-6' }, base: { shape: 'rect', dims: [120, 100], bolts: '2-17, 6-6' } },
+            "76.3": { head: { shape: 'rect', dims: [150, 100], bolts: '6-6' }, base: { shape: 'rect', dims: [150, 100], bolts: '2-17, 6-6' } },
+            "89.1": { head: { shape: 'rect', dims: [150, 100], bolts: '6-6' }, base: { shape: 'rect', dims: [150, 100], bolts: '2-17, 6-6' } },
+            "101.6": { head: { shape: 'rect', dims: [165, 105], bolts: '6-6' }, base: { shape: 'rect', dims: [165, 105], bolts: '2-17, 6-6' } }
+        };
+
+        let currentSectionData = sectionDataSteel;
+        let savedResults = [];
+        let performanceChart = null;
+        
+        // --- Functions ---
+        function runAllCalculations() {
+            calculateStress();
+            calculateBearing();
+        }
+
+        function updateMaterial() {
+            const selectedMaterial = document.querySelector('input[name="material"]:checked').value;
+            const strengthSelect = document.getElementById('strength');
+            currentSectionData = (selectedMaterial === 'stainless') ? sectionDataStainless : sectionDataSteel;
+            strengthSelect.innerHTML = '';
+            materialData[selectedMaterial].grades.forEach(grade => {
+                const option = document.createElement('option');
+                option.value = grade.value;
+                option.textContent = grade.text;
+                strengthSelect.appendChild(option);
+            });
+            strengthSelect.disabled = materialData[selectedMaterial].grades.length === 1;
+            document.getElementById('section-type').value = '1'; 
+            updateSection();
+        }
+
+        function updateSection() {
+            const sectionType = document.getElementById('section-type').value;
+            if (sectionType !== 'custom') {
+                const section = currentSectionData[sectionType];
+                document.getElementById('diameter').value = section.D;
+                document.getElementById('thickness').value = section.t;
+                const sectionKey = Object.keys(sectionDataSteel).find(key => sectionDataSteel[key].D == section.D);
+                updateDefaultPlateData(sectionDataSteel[sectionKey].D);
+            }
+            runAllCalculations();
+        }
+
+        function getCalculationCore(L, D, t, F, material) {
+            const A = Math.PI * t * (D - t);
+            const I = Math.PI * (Math.pow(D, 4) - Math.pow(D - 2*t, 4)) / 64;
+            if (A <= 0 || I <= 0) return { A:0, I:0, i:0, lambda_raw: 999, fc: 0, Fc: 0 };
+            const i = Math.sqrt(I / A);
+            const lambda_raw = L / i;
+            let fc = 0;
+            if (material === 'stainless') {
+                const E = 193000;
+                const cLambda_raw = (1 / Math.PI) * lambda_raw * Math.sqrt(F / E);
+                const cLambda = Math.ceil(cLambda_raw * 100) / 100;
+                const keys = Object.keys(fcLookupTable).map(parseFloat).sort((a, b) => a - b);
+                let lowerKey = keys.filter(k => k <= cLambda).pop();
+                if(lowerKey) { fc = fcLookupTable[lowerKey.toFixed(2)]; } else { fc = fcLookupTable["0.01"]; }
+            } else {
+                const lambda = Math.ceil(lambda_raw * 10) / 10;
+                if (lambda > 200) return { A, I, i, lambda_raw, fc: 0, Fc: 0 };
+                let lambdaLimit = 1500 / Math.sqrt(F / 1.5);
+                if (lambda <= lambdaLimit) {
+                    const nu = 3/2 + 2/3 * Math.pow(lambda / lambdaLimit, 2);
+                    fc = (1 - 0.4 * Math.pow(lambda / lambdaLimit, 2)) * F / nu;
+                } else {
+                    fc = 0.277 * F / Math.pow(lambda / lambdaLimit, 2);
+                }
+            }
+            const Fc = (A * fc) / 1000;
+            return { A, I, i, lambda_raw, fc, Fc };
+        }
+
+        function calculateStress() {
+            const D = parseFloat(document.getElementById('diameter').value);
+            const t = parseFloat(document.getElementById('thickness').value);
+            const L = parseFloat(document.getElementById('length').value);
+            const F = parseFloat(document.getElementById('strength').value);
+            const N = parseFloat(document.getElementById('axial-force').value);
+            if (isNaN(D) || isNaN(t) || isNaN(L) || isNaN(F) || isNaN(N) || D <= 0 || t <= 0 || L <= 0 || F <= 0 || N < 0 || t >= D/2) { return; }
+            const material = document.querySelector('input[name="material"]:checked').value;
+            const { A, I, i, lambda_raw, fc, Fc } = getCalculationCore(L, D, t, F, material);
+            const lambda = Math.ceil(lambda_raw * 10) / 10;
+            const sigma = A > 0 ? (N * 1000 / A) : 0;
+            const ratio = (Fc > 0) ? N / Fc : 999;
+            document.getElementById('calc-area').textContent = A.toFixed(2);
+            document.getElementById('calc-moment').textContent = I.toFixed(0);
+            document.getElementById('calc-radius').textContent = i.toFixed(3);
+            document.getElementById('calc-lambda').textContent = lambda.toFixed(1);
+            document.getElementById('calc-sigma').textContent = isFinite(sigma) ? sigma.toFixed(2) : '---';
+            document.getElementById('calc-fc').textContent = fc.toFixed(2);
+            document.getElementById('calc-fc-force').textContent = Fc.toFixed(2);
+            document.getElementById('calc-verification-ratio').textContent = ratio.toFixed(2);
+            if (material === 'stainless') {
+                const E = 193000;
+                const cLambda_raw = (1 / Math.PI) * lambda_raw * Math.sqrt(F / E);
+                document.getElementById('lambda-limit-label').textContent = '無次元細長比 cλ';
+                document.getElementById('calc-lambda-limit').textContent = isFinite(cLambda_raw) ? (Math.ceil(cLambda_raw * 100) / 100).toFixed(2) : '---';
+            } else {
+                document.getElementById('lambda-limit-label').textContent = '限界細長比 Λ';
+                document.getElementById('calc-lambda-limit').textContent = (1500 / Math.sqrt(F / 1.5)).toFixed(1);
+            }
+            if (lambda > 200) {
+                updateJudgment('stress', 999, N, '細長比λが200超過');
+                const fields = ['lambda-limit', 'fc', 'fc-force', 'verification-ratio'];
+                fields.forEach(f => { const el = document.getElementById(`calc-${f}`); if(el) el.textContent = '---'; });
+                startOrUpdateAnimation(1.0, 999, L, N);
+                return;
+            }
+            updateJudgment('stress', ratio, N);
+            startOrUpdateAnimation(1.0, ratio, L, N);
+        }
+
+        function calculateAndSetMaxL() {
+            const D = parseFloat(document.getElementById('diameter').value);
+            const t = parseFloat(document.getElementById('thickness').value);
+            const F = parseFloat(document.getElementById('strength').value);
+            const N = parseFloat(document.getElementById('axial-force').value);
+            const material = document.querySelector('input[name="material"]:checked').value;
+            if (isNaN(D) || isNaN(t) || isNaN(F) || isNaN(N) || N <= 0) { alert('断面、基準強度、軸力を正しく入力してください。'); return; }
+            let lowL = 0, highL = 50000, bestL = 0;
+            for(let i = 0; i < 50; i++) {
+                let midL = (lowL + highL) / 2;
+                if (midL === 0) { break; }
+                const { Fc, lambda_raw } = getCalculationCore(midL, D, t, F, material);
+                const lambda = Math.ceil(lambda_raw * 10) / 10;
+                if (Fc > N && lambda <= 200) { bestL = midL; lowL = midL; } else { highL = midL; }
+            }
+            document.getElementById('length').value = Math.floor(bestL);
+            runAllCalculations();
+        }
+
+        function handleTimberChange() {
+            const timberSelect = document.getElementById('bearing-timber-species');
+            const fcvInput = document.getElementById('bearing-fcv');
+            fcvInput.readOnly = timberSelect.value !== 'custom';
+            if (timberSelect.value === 'custom') fcvInput.focus();
+            else fcvInput.value = timberSelect.value;
+            updateSigmaCv();
+        }
+        
+        function updateSigmaCv() {
+            const fcv = parseFloat(document.getElementById('bearing-fcv').value) || 0;
+            document.getElementById('bearing-sigma-cv').value = (fcv / 2.0).toFixed(2);
+            runAllCalculations();
+        }
+
+        function togglePlateInputs(type, shape) {
+            document.getElementById(`bearing-${type}-plate-dims-rect`).style.display = shape === 'rect' ? 'block' : 'none';
+            document.getElementById(`bearing-${type}-plate-dims-circ`).style.display = shape === 'circ' ? 'block' : 'none';
+        }
+
+        function updateDefaultPlateData(diameterValue) {
+            const defaults = defaultPlateData[String(diameterValue)];
+            if (!defaults) return; 
+            setPlateDefaults('head', defaults.head);
+            setPlateDefaults('base', defaults.base);
+        }
+        
+        function setPlateDefaults(type, data) {
+            document.getElementById(`bearing-${type}-plate-shape`).value = data.shape;
+            if (data.shape === 'rect') {
+                document.getElementById(`bearing-${type}-rect-w`).value = data.dims[0];
+                document.getElementById(`bearing-${type}-rect-h`).value = data.dims[1];
+            } else {
+                document.getElementById(`bearing-${type}-circ-d`).value = data.dims[0];
+            }
+            document.getElementById(`bearing-${type}-bolt-holes`).value = data.bolts;
+            togglePlateInputs(type, data.shape);
+        }
+
+        function getEffectiveArea(type) {
+            try {
+                const shape = document.getElementById(`bearing-${type}-plate-shape`).value;
+                const boltString = document.getElementById(`bearing-${type}-bolt-holes`).value;
+                let grossArea = 0, spec = '';
+                if (shape === 'rect') {
+                    const [w, h] = [parseFloat(document.getElementById(`bearing-${type}-rect-w`).value), parseFloat(document.getElementById(`bearing-${type}-rect-h`).value)];
+                    if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) throw new Error();
+                    grossArea = w * h;
+                    spec = `PL-${w}x${h}`;
+                } else {
+                    const d = parseFloat(document.getElementById(`bearing-${type}-circ-d`).value);
+                    if (isNaN(d) || d <= 0) throw new Error();
+                    grossArea = Math.PI * (d / 2) ** 2;
+                    spec = `PL-Φ${d}`;
+                }
+                let boltArea = 0;
+                if (boltString.trim()) {
+                    for (const entry of boltString.split(',').map(s => s.trim())) {
+                        if (!entry) continue;
+                        const parts = entry.split('-');
+                        if (parts.length !== 2) throw new Error();
+                        const [qty, dia] = [parseInt(parts[0], 10), parseFloat(parts[1])];
+                        if (isNaN(qty) || isNaN(dia) || qty <= 0 || dia <= 0) throw new Error();
+                        boltArea += qty * (Math.PI * (dia / 2) ** 2);
+                    }
+                }
+                const effectiveArea = grossArea - boltArea;
+                if (effectiveArea <= 0) throw new Error();
+                return { area: effectiveArea, spec: spec };
+            } catch(e) { return null; }
+        }
+
+        function calculateBearing() {
+            const sigmaCv = parseFloat(document.getElementById('bearing-sigma-cv').value);
+            const axialForce = parseFloat(document.getElementById('axial-force').value);
+            if (isNaN(axialForce) || axialForce < 0 || isNaN(sigmaCv) || sigmaCv <= 0) { return; }
+            const headData = getEffectiveArea('head');
+            const baseData = getEffectiveArea('base');
+            if (!headData || !baseData) { 
+                ['location', 'spec', 'area', 'capacity', 'ratio'].forEach(id => document.getElementById(`bearing-result-${id}`).textContent = '---');
+                updateJudgment('bearing', 999, axialForce, '入力値不正');
+                return;
+            };
+            let criticalData = (headData.area <= baseData.area) ? { location: '柱頭', ...headData } : { location: '柱脚', ...baseData };
+            const capacity = (sigmaCv * criticalData.area) / 1000;
+            const ratio = capacity > 0 ? axialForce / capacity : 999;
+            document.getElementById('bearing-result-location').textContent = criticalData.location;
+            document.getElementById('bearing-result-spec').textContent = criticalData.spec;
+            document.getElementById('bearing-result-area').textContent = criticalData.area.toFixed(2);
+            document.getElementById('bearing-result-capacity').textContent = capacity.toFixed(2);
+            document.getElementById('bearing-result-ratio').textContent = ratio.toFixed(2);
+            updateJudgment('bearing', ratio, axialForce);
+        }
+
+        function updateJudgment(type, ratio, N, overrideText = null) {
+            const judgmentSection = document.getElementById(`judgment-section-${type}`);
+            const ratioValue = document.getElementById(`judgment-ratio-value-${type}`);
+            const colorBarFill = document.getElementById(`color-bar-fill-${type}`);
+            const judgmentText = document.getElementById(`judgment-text-${type}`);
+            ratioValue.textContent = isFinite(ratio) ? ratio.toFixed(2) : "---";
+            const percentage = Math.min(ratio * 100, 100);
+            colorBarFill.style.width = isFinite(ratio) ? percentage + '%' : '0%';
+            if (overrideText) {
+                judgmentSection.className = 'judgment-section ng';
+                judgmentText.textContent = overrideText;
+                ratioValue.textContent = "---";
+                return;
+            }
+            if (ratio > 0 && ratio <= 0.9) {
+                judgmentSection.className = 'judgment-section ok';
+                judgmentText.textContent = 'OK';
+            } else if (ratio > 0.9 && ratio <= 1.0) {
+                judgmentSection.className = 'judgment-section warning';
+                judgmentText.textContent = 'WARNING';
+            } else {
+                judgmentSection.className = 'judgment-section ng';
+                if (N > 0) { judgmentText.textContent = 'NG'; } else { judgmentText.textContent = '軸力を入力'; }
+            }
+        }
+        
+        function saveCurrentResult() {
+            const result = {
+                material: document.querySelector('input[name="material"]:checked').value === 'steel' ? 'スチール' : 'ステンレス',
+                section: `D${document.getElementById('diameter').value} t${document.getElementById('thickness').value}`,
+                length: document.getElementById('length').value,
+                axialForce: document.getElementById('axial-force').value,
+                lambda: document.getElementById('calc-lambda').textContent,
+                lambda_comp: document.getElementById('calc-lambda-limit').textContent,
+                fc: document.getElementById('calc-fc').textContent,
+                Fc: document.getElementById('calc-fc-force').textContent,
+                ratio_stress: document.getElementById('calc-verification-ratio').textContent,
+                ratio_bearing: document.getElementById('bearing-result-ratio').textContent
+            };
+            savedResults.push(result);
+            renderSavedResultsTable();
+        }
+
+        function renderSavedResultsTable() {
+            const table = document.getElementById('saved-results-table');
+            table.innerHTML = ''; 
+            if (savedResults.length === 0) return;
+            const headers = ['材質', '断面', '長さ(mm)', '軸力(kN)', 'λ', 'cλ/Λ', 'fc', 'Fc(kN)', '検定比(応力度)', '検定比(めり込み)'];
+            let html = '<thead><tr><th>項目</th>';
+            for (let i = 0; i < savedResults.length; i++) { html += `<th>結果 ${i + 1}</th>`; }
+            html += '</tr></thead><tbody>';
+            const keys = ['material', 'section', 'length', 'axialForce', 'lambda', 'lambda_comp', 'fc', 'Fc', 'ratio_stress', 'ratio_bearing'];
+            headers.forEach((header, index) => {
+                html += `<tr><th>${header}</th>`;
+                savedResults.forEach(res => { html += `<td>${res[keys[index]]}</td>`; });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+        }
+        
+        function clearResults() {
+            savedResults = [];
+            renderSavedResultsTable();
+        }
+        
+        async function exportPageToPDF() {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+            pdf.setFont('NotoSansJP-Regular');
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const margin = 40;
+            const contentWidth = pdfWidth - (margin * 2);
+            const pageHeight = pdfHeight - (margin * 2);
+
+            const elementsToPrint = Array.from(document.querySelector('#pdf-content-wrapper').children);
+
+            const buttonsToHide = document.querySelectorAll('.no-print');
+            buttonsToHide.forEach(btn => btn.style.display = 'none');
+
+            const graphContainer = document.getElementById('graph-section-container');
+            const savedResultsContainer = document.getElementById('saved-results-container');
+            if (performanceChart === null) graphContainer.style.display = 'none';
+            if (savedResults.length === 0) savedResultsContainer.style.display = 'none';
+            
+            let currentY = margin;
+
+            for (const element of elementsToPrint) {
+                if (element.style.display === 'none' || getComputedStyle(element).display === 'none') {
+                    continue;
+                }
+                
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true
+                });
+                
+                const imgData = canvas.toDataURL('image/png');
+                const imgProps = pdf.getImageProperties(imgData);
+                const elementHeight = (imgProps.height * contentWidth) / imgProps.width;
+
+                if (currentY + elementHeight > pdfHeight - margin) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                
+                pdf.addImage(imgData, 'PNG', margin, currentY, contentWidth, elementHeight);
+                currentY += elementHeight + 10;
+            }
+
+            buttonsToHide.forEach(btn => btn.style.display = '');
+            graphContainer.style.display = '';
+            savedResultsContainer.style.display = '';
+
+            pdf.save('計算結果.pdf');
+        }
+
+        function showPerformanceGraph() {
+            const D = parseFloat(document.getElementById('diameter').value);
+            const t = parseFloat(document.getElementById('thickness').value);
+            const F = parseFloat(document.getElementById('strength').value);
+            const material = document.querySelector('input[name="material"]:checked').value;
+            const materialName = material === 'steel' ? 'スチール' : 'ステンレス';
+            const canvas = document.getElementById('fc-vs-l-chart');
+            canvas.style.display = 'block';
+            document.getElementById('graph-title').textContent = `性能グラフ (${materialName} D${D} t${t})`;
+            const { i } = getCalculationCore(1000, D, t, F, material);
+            const maxLength = 200 * i;
+            const labels = [];
+            const data = [];
+            for (let l = 100; l <= maxLength; l += 100) {
+                const { Fc } = getCalculationCore(l, D, t, F, material);
+                labels.push(l);
+                data.push(Fc > 0 ? Fc.toFixed(2) : null);
+            }
+            if (performanceChart) performanceChart.destroy();
+            performanceChart = new Chart(canvas, {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: `許容圧縮耐力 Fc (kN)`, data: data, borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)', fill: true, tension: 0.1, spanGaps: true }] },
+                options: { scales: { x: { title: { display: true, text: '部材長さ L (mm)' } }, y: { title: { display: true, text: '許容圧縮耐力 Fc (kN)' }, beginAtZero: true } } }
+            });
+        }
+
+        // --- 子ウィンドウを開く関数 ---
+        window.openAxialForceTool = function() {
+            window.open('axial_force_tool.html', 'AxialForceTool', 'width=900,height=800,scrollbars=yes');
+        };
+
+        // --- 子ウィンドウから値を受け取る関数 ---
+        window.receiveAxialForce = function(val) {
+            const input = document.getElementById('axial-force');
+            if(input) {
+                input.value = val;
+                // 値変更イベントを手動発火して計算を実行させる
+                input.dispatchEvent(new Event('input'));
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Event Listeners
+            document.querySelectorAll('input[name="material"]').forEach(radio => radio.addEventListener('change', updateMaterial));
+            document.getElementById('section-type').addEventListener('change', updateSection);
+            ['length', 'strength', 'axial-force', 'diameter', 'thickness'].forEach(id => {
+                const el = document.getElementById(id);
+                el.addEventListener('input', () => {
+                    if (id === 'diameter' || id === 'thickness') document.getElementById('section-type').value = 'custom';
+                    runAllCalculations();
+                });
+            });
+            document.getElementById('calc-max-l-btn').addEventListener('click', calculateAndSetMaxL);
+            document.getElementById('bearing-timber-species').addEventListener('change', handleTimberChange);
+            document.getElementById('bearing-fcv').addEventListener('input', updateSigmaCv);
+            ['bearing-head-plate-shape', 'bearing-base-plate-shape'].forEach(id => {
+                document.getElementById(id).addEventListener('change', e => {
+                    togglePlateInputs(id.includes('head') ? 'head' : 'base', e.target.value);
+                    calculateBearing();
+                });
+            });
+            ['bearing-head-rect-w', 'bearing-head-rect-h', 'bearing-head-circ-d', 'bearing-head-bolt-holes', 'bearing-base-rect-w', 'bearing-base-rect-h', 'bearing-base-circ-d', 'bearing-base-bolt-holes'].forEach(id => {
+                 document.getElementById(id).addEventListener('input', calculateBearing);
+            });
+            document.getElementById('save-result-btn').addEventListener('click', saveCurrentResult);
+            document.getElementById('clear-results-btn').addEventListener('click', clearResults);
+            document.getElementById('export-pdf-btn').addEventListener('click', exportPageToPDF);
+            document.getElementById('print-btn').addEventListener('click', () => window.print());
+            document.getElementById('show-graph-btn').addEventListener('click', showPerformanceGraph);
+            
+            function initializeCalculator() {
+                const selectedMaterial = document.querySelector('input[name="material"]:checked').value;
+                const strengthSelect = document.getElementById('strength');
+                currentSectionData = (selectedMaterial === 'stainless') ? sectionDataStainless : sectionDataSteel;
+                strengthSelect.innerHTML = '';
+                materialData[selectedMaterial].grades.forEach(grade => {
+                    const option = document.createElement('option');
+                    option.value = grade.value;
+                    option.textContent = grade.text;
+                    strengthSelect.appendChild(option);
+                });
+                strengthSelect.disabled = materialData[selectedMaterial].grades.length === 1;
+                const sectionType = document.getElementById('section-type').value;
+                const section = currentSectionData[sectionType];
+                const diameterInput = document.getElementById('diameter');
+                diameterInput.value = section.D;
+                document.getElementById('thickness').value = section.t;
+                const timberSelect = document.getElementById('bearing-timber-species');
+                const fcvInput = document.getElementById('bearing-fcv');
+                fcvInput.readOnly = timberSelect.value !== 'custom';
+                if (timberSelect.value !== 'custom') fcvInput.value = timberSelect.value;
+                const fcv = parseFloat(fcvInput.value) || 0;
+                document.getElementById('bearing-sigma-cv').value = (fcv / 2.0).toFixed(2);
+                updateDefaultPlateData(diameterInput.value);
+                runAllCalculations();
+                startOrUpdateAnimation(1.0, 0, 3000, 10);
+            }
+
+            initializeCalculator();
+        });
+    </script>
+</body>
+</html>
