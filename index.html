@@ -84,6 +84,27 @@
             height: auto;
         }
 
+        /* 詳細ログ用CSS */
+        .detail-box {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .detail-box h3 { border-bottom: 1px solid #95a5a6; padding-bottom: 5px; margin-top: 0; color: #fff; margin-bottom: 15px; font-size: 1rem; }
+        .detail-box h4 { color: #f1c40f; margin: 15px 0 5px 0; border-left: 4px solid #f1c40f; padding-left: 8px; font-size: 0.9rem; }
+        .log-row { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 4px 0; }
+        .log-row:hover { background: rgba(255,255,255,0.05); }
+        .log-key { color: #bdc3c7; flex: 1; }
+        .log-val { color: #2ecc71; font-weight: 700; text-align: right; }
+        .log-note { font-size: 0.75rem; color: #95a5a6; display: block; text-align: right; margin-left: 10px; }
+        .log-formula { color: #3498db; font-size: 0.8rem; text-align: right; margin-right: 10px; flex: 1; }
+
         @media print {
             html, body { height: auto; margin: 0 !important; padding: 0 !important; background: #fff !important; font-size: 10pt; }
             body * { visibility: hidden; }
@@ -92,7 +113,10 @@
             .no-print { display: none !important; }
             .content { padding: 20px !important; }
             .header { display: none !important; }
-            .input-section, .results-section, .judgment-section, .graph-section, .saved-results-section { page-break-inside: avoid; box-shadow: none; border: 1px solid #ccc; padding: 15px; background: #fff !important; }
+            .input-section, .results-section, .judgment-section, .graph-section, .saved-results-section, .detail-box { page-break-inside: avoid; box-shadow: none; border: 1px solid #ccc; padding: 15px; background: #fff !important; color: #000 !important; }
+            .detail-box { background: #fff !important; color: #000 !important; border: 1px solid #333; }
+            .detail-box h3, .detail-box h4 { color: #000 !important; }
+            .log-key, .log-val, .log-formula, .log-note { color: #000 !important; }
             .input-grid, .results-grid { grid-template-columns: 1fr !important; }
             .material-selector { flex-direction: row; }
             .material-option { max-width: 150px; }
@@ -230,6 +254,8 @@
                     </div>
                 </div>
                 
+                <div id="calc_log" class="detail-box"></div>
+                
                 <div class="graph-section" id="graph-section-container">
                     <div class="saved-results-header">
                         <h2 id="graph-title">性能グラフ</h2>
@@ -256,7 +282,6 @@
         </div>
     </div>
 
-    <!-- PDF作成中オーバーレイ -->
     <div id="pdf-progress-overlay" style="display:none">
         <div class="pdf-progress-box">
             <div class="spinner" aria-hidden="true"></div>
@@ -274,12 +299,33 @@
             const el = document.getElementById('pdf-progress-overlay');
             if (el) el.style.display = 'none';
         }
+        
         // --- グローバル変数と定数 ---
         let animationFrameId = null;
         let animationConfig = { k: 1.0, ratio: 0, L: 3000, N: 100 };
         const animationDuration = 2000; 
         let animationStartTime = 0;
         
+        // --- Log Object ---
+        const Log = {
+            lines:[], 
+            clear(){this.lines=[]}, 
+            header(h){this.lines.push({t:'h',h})}, 
+            add(k,v,f,n){this.lines.push({t:'r',k,v,f,n})}, 
+            render(){ 
+                const box=document.getElementById('calc_log'); 
+                box.innerHTML = '<h3>計算詳細ログ</h3>' + this.lines.map(l=>{ 
+                if(l.t==='h') return `<h4>${l.h}</h4>`; 
+                return `<div class="log-row">
+                    <span class="log-key">${l.k}</span>
+                    ${l.f ? `<span class="log-formula">${l.f}</span>` : ''}
+                    <span class="log-val">${l.v}</span>
+                    ${l.n?` <span class="log-note">${l.n}</span>`:''}
+                </div>`; 
+                }).join(''); 
+            } 
+        };
+
         function animationLoop(timestamp) {
             if (!animationStartTime) {
                 animationStartTime = timestamp;
@@ -406,8 +452,10 @@
         
         // --- Functions ---
         function runAllCalculations() {
+            Log.clear();
             calculateStress();
             calculateBearing();
+            Log.render();
             try { showPerformanceGraph(); } catch (e) { /* noop */ }
         }
 
@@ -469,17 +517,30 @@
         }
 
         function calculateStress() {
+            Log.header("1. 断面性能・許容応力度");
             const D = parseFloat(document.getElementById('diameter').value);
             const t = parseFloat(document.getElementById('thickness').value);
             const L = parseFloat(document.getElementById('length').value);
             const F = parseFloat(document.getElementById('strength').value);
             const N = parseFloat(document.getElementById('axial-force').value);
+            
             if (isNaN(D) || isNaN(t) || isNaN(L) || isNaN(F) || isNaN(N) || D <= 0 || t <= 0 || L <= 0 || F <= 0 || N < 0 || t >= D/2) { return; }
+            
             const material = document.querySelector('input[name="material"]:checked').value;
+            const matName = (material==='stainless') ? 'ステンレス' : 'スチール';
+            Log.add("材料・断面", `${matName} Φ${D} t${t}`, `基準強度 F=${F}`, "");
+
             const { A, I, i, lambda_raw, fc, Fc } = getCalculationCore(L, D, t, F, material);
             const lambda = Math.ceil(lambda_raw * 10) / 10;
+            
+            Log.add("断面積 A", A.toFixed(2), `π×t×(D-t)`, "mm²");
+            Log.add("断面二次モーメント I", I.toFixed(0), `π×(D⁴-(D-2t)⁴)/64`, "mm⁴");
+            Log.add("断面二次半径 i", i.toFixed(3), `√(I/A)`, "mm");
+            Log.add("細長比 λ", lambda.toFixed(1), `L(${L}) / i(${i.toFixed(3)})`, "");
+
             const sigma = A > 0 ? (N * 1000 / A) : 0;
             const ratio = (Fc > 0) ? N / Fc : 999;
+            
             document.getElementById('calc-area').textContent = A.toFixed(2);
             document.getElementById('calc-moment').textContent = I.toFixed(0);
             document.getElementById('calc-radius').textContent = i.toFixed(3);
@@ -488,15 +549,23 @@
             document.getElementById('calc-fc').textContent = fc.toFixed(2);
             document.getElementById('calc-fc-force').textContent = Fc.toFixed(2);
             document.getElementById('calc-verification-ratio').textContent = ratio.toFixed(2);
+            
             if (material === 'stainless') {
                 const E = 193000;
                 const cLambda_raw = (1 / Math.PI) * lambda_raw * Math.sqrt(F / E);
                 document.getElementById('lambda-limit-label').textContent = '無次元細長比 cλ';
                 document.getElementById('calc-lambda-limit').textContent = isFinite(cLambda_raw) ? (Math.ceil(cLambda_raw * 100) / 100).toFixed(2) : '---';
+                Log.add("許容応力度 fc", fc.toFixed(2), "表参照(cλより)", "N/mm²");
             } else {
+                const limit = 1500 / Math.sqrt(F / 1.5);
                 document.getElementById('lambda-limit-label').textContent = '限界細長比 Λ';
-                document.getElementById('calc-lambda-limit').textContent = (1500 / Math.sqrt(F / 1.5)).toFixed(1);
+                document.getElementById('calc-lambda-limit').textContent = limit.toFixed(1);
+                Log.add("限界細長比 Λ", limit.toFixed(1), `1500/√(F/1.5)`, "");
+                Log.add("許容応力度 fc", fc.toFixed(2), (lambda<=limit)?"長期式(低減)":"オイラー式", "N/mm²");
             }
+            Log.add("許容圧縮耐力 Fc", Fc.toFixed(2)+" kN", `A×fc / 1000`, "");
+            Log.add("検定比 (応力度)", ratio.toFixed(2), `N(${N}) / Fc(${Fc.toFixed(2)})`, (ratio<=1.0)?"OK":"NG");
+
             if (lambda > 200) {
                 updateJudgment('stress', 999, N, '細長比λが200超過');
                 const fields = ['lambda-limit', 'fc', 'fc-force', 'verification-ratio'];
@@ -595,14 +664,18 @@
                 }
                 const effectiveArea = grossArea - boltArea;
                 if (effectiveArea <= 0) throw new Error();
-                return { area: effectiveArea, spec: spec };
+                return { area: effectiveArea, spec: spec, gross: grossArea, bolt: boltArea };
             } catch(e) { return null; }
         }
 
         function calculateBearing() {
+            Log.header("2. めり込み検討");
             const sigmaCv = parseFloat(document.getElementById('bearing-sigma-cv').value);
             const axialForce = parseFloat(document.getElementById('axial-force').value);
             if (isNaN(axialForce) || axialForce < 0 || isNaN(sigmaCv) || sigmaCv <= 0) { return; }
+            
+            Log.add("めり込み許容応力度 σcv", sigmaCv.toFixed(2), "Fcv / 2.0", "N/mm²");
+
             const headData = getEffectiveArea('head');
             const baseData = getEffectiveArea('base');
             if (!headData || !baseData) { 
@@ -610,14 +683,23 @@
                 updateJudgment('bearing', 999, axialForce, '入力値不正');
                 return;
             };
+
             let criticalData = (headData.area <= baseData.area) ? { location: '柱頭', ...headData } : { location: '柱脚', ...baseData };
+            Log.add("検討箇所", criticalData.location, criticalData.spec, (headData.area <= baseData.area)?"柱頭(小)":"柱脚(小)");
+            Log.add("有効断面積 Ae", criticalData.area.toFixed(2), `${criticalData.gross.toFixed(0)} - ${criticalData.bolt.toFixed(0)}(孔)`, "mm²");
+
             const capacity = (sigmaCv * criticalData.area) / 1000;
             const ratio = capacity > 0 ? axialForce / capacity : 999;
+            
             document.getElementById('bearing-result-location').textContent = criticalData.location;
             document.getElementById('bearing-result-spec').textContent = criticalData.spec;
             document.getElementById('bearing-result-area').textContent = criticalData.area.toFixed(2);
             document.getElementById('bearing-result-capacity').textContent = capacity.toFixed(2);
             document.getElementById('bearing-result-ratio').textContent = ratio.toFixed(2);
+            
+            Log.add("許容めり込み耐力 P", capacity.toFixed(2)+" kN", `Ae × σcv / 1000`, "");
+            Log.add("検定比 (めり込み)", ratio.toFixed(2), `N(${axialForce}) / P(${capacity.toFixed(2)})`, (ratio<=1.0)?"OK":"NG");
+            
             updateJudgment('bearing', ratio, axialForce);
         }
 
