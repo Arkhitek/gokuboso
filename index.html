@@ -146,7 +146,11 @@
     </style>
 </head>
 <body>
-    <div class="container printable-area">
+        <!-- ページ右上ロゴ -->
+        <a href="https://arkhitek.co.jp/" target="_blank" style="position:fixed;top:24px;right:32px;z-index:10000;display:block;">
+            <img src="arkhitek_logo.png" alt="Arkhitek Logo" style="height:54px;width:auto;box-shadow:0 2px 8px rgba(0,0,0,0.08);background:transparent;" />
+        </a>
+        <div class="container printable-area">
         <div class="header"><h1>極細柱の許容応力度計算</h1></div>
         <div class="content">
             
@@ -275,9 +279,16 @@
             </div>
             
             <div class="bottom-toolbar no-print">
-                <button class="action-button no-print" id="save-result-btn">この結果を保存</button>
-                <button class="action-button" id="export-pdf-btn">計算書PDF出力</button>
-                <button class="action-button secondary" id="print-btn">画面を印刷</button>
+                                <button class="action-button no-print" id="save-result-btn">この結果を保存</button>
+                                <button class="action-button" id="export-pdf-btn">計算書PDF出力</button>
+                                <button class="action-button secondary" id="print-btn">画面を印刷</button>
+                        </div>
+                        <!-- ページ最下部ロゴ -->
+                        <div style="width:100%;text-align:center;margin:48px 0 0 0;">
+                            <a href="https://arkhitek.co.jp/" target="_blank" style="display:inline-block;">
+                                <img src="arkhitek_logo.png" alt="Arkhitek Logo" style="height:64px;width:auto;opacity:0.92;" />
+                            </a>
+                        </div>
             </div>
         </div>
     </div>
